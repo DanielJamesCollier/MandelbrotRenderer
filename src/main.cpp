@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <complex>
 
-
 // my
 #include "sdl_module.hpp"
 
@@ -16,8 +15,6 @@ float map(float value, float istart, float istop, float ostart, float ostop) {
 int 
 main() {
     std::cout << "Mandelbrot Renderer Started!" << std::endl;
-    
-    using namespace std::literals;
     
     try {
         sdl_module sdl("Mandelbrot Renderer", 500, 500);
@@ -30,6 +27,11 @@ main() {
 
         bool running = true;
         int iterations = 15;
+
+        float min_x = -2.0f;
+        float max_x = 1.0f;
+        float min_i = -1.5f;
+        float max_i = 1.5f;
 
         while(running) {
 
@@ -47,8 +49,8 @@ main() {
             for (auto y = 0; y < width; y++) {
                 for (auto x = 0; x < height; x++) {
 
-                    std::complex<float> c(map(x, 0, width, -2, 1),
-                                          map(y, 0, height, -1.5, 1.5));
+                    std::complex<float> c(map(x, 0, width, min_x, max_x),
+                                          map(y, 0, height, min_i, max_i));
 
                     std::complex<float> z_previous(0, 0);
                     std::complex<float> z_current(0, 0);
@@ -60,25 +62,22 @@ main() {
                     while (current_iteration < iterations) {
                         z_previous = z_current;
 
-                        z_current = std::complex<float>(std::pow(z_previous.real(), 2.0f) - std::pow(z_previous.imag(), 2.0f) + c.real(), 
+                        z_current = std::complex<float>(std::pow(z_previous.real(), 2) - std::pow(z_previous.imag(), 2) + c.real(), 
                                                         2.0f * z_previous.real() * z_previous.imag() + c.imag());
 
 
-                        if (std::norm(z_current) > 4.0f) break;
+                        if (std::norm(z_current) > 4.0f) break; 
 
                         current_iteration++;
                     }
 
-                    int r = 0;
-                    int g = 0;
-                    int b = 0;
+                    std::uint8_t blue = 0;
 
-                    if (current_iteration == iterations) {
-                    } else {
-                        b = current_iteration * 20;
+                    if (current_iteration != iterations) {
+                        blue  = static_cast<int>(current_iteration) * 20;
                     }
-            
-                    std::uint32_t colour = (255 << 24) + (r << 16) + (g << 8) + b; 
+                                           // alpha    + blue  
+                    std::uint32_t colour = (255 << 24) + blue; 
                     pixels[x + y * width] = colour;
 
                 }
