@@ -1,15 +1,29 @@
 // std
+#include <complex>
 #include <iostream>
 #include <vector>
 #include <algorithm>
 #include <cstdint>
-#include <complex>
+#include <thread>
+#include <chrono>
+#include <tuple>
 
 // my
 #include "sdl_module.hpp"
 
-float map(float value, float istart, float istop, float ostart, float ostop) {
+double map(double value, double istart, double istop, double ostart, double ostop) {
     return ostart + (ostop - ostart) * ((value - istart) / (istop - istart));
+}
+
+std::tuple<int, int, int> get_rgb_smooth(int n, int iter_max) {
+  	// map n on the 0..1 interval
+  	double t = (double)n/(double)iter_max;
+  
+  	// Use smooth polynomials for r, g, b
+  	int r = (int)(9*(1-t)*t*t*t*255);
+  	int g = (int)(15*(1-t)*(1-t)*t*t*255);
+  	int b =  (int)(8.5*(1-t)*(1-t)*(1-t)*t*255);
+    return std::tuple<int, int, int>(r, g, b);
 }
 
 int 
@@ -26,12 +40,19 @@ main() {
         std::fill(std::begin(pixels), std::end(pixels), 0);
 
         bool running = true;
-        int iterations = 15;
+        int max_iterations = 500;
 
-        float min_x = -2.0f;
-        float max_x = 1.0f;
-        float min_i = -1.5f;
-        float max_i = 1.5f;
+        double min_x = -2.0f;
+        double max_x = 1.2f;
+        double min_i = -1.7f;
+        double max_i = 1.7f;
+
+        double zoom = 1.0;
+
+        double center_x = 0.0f;
+        double center_y = 0.0f;
+
+        std::uint8_t time = 0;
 
         while(running) {
 
@@ -44,46 +65,41 @@ main() {
             }
             
             sdl.clear_back_buffer();
-    
-            // Z = Z^2 + C
+            std::fill(std::begin(pixels), std::end(pixels), 0); 
+
+            auto start = std::chrono::system_clock::now();
+            std::complex<double> c(0);
+            std::complex<double> z(0);
+           
             for (auto y = 0; y < width; y++) {
                 for (auto x = 0; x < height; x++) {
-
-                    std::complex<float> c(map(x, 0, width, min_x, max_x),
-                                          map(y, 0, height, min_i, max_i));
-
-                    std::complex<float> z_previous(0, 0);
-                    std::complex<float> z_current(0, 0);
                     
+                    z = {0, 0}; 
+                    c = {map(x, 0.0f, width, min_x, max_x) * zoom, map(y, 0.0f, height, min_i, max_i) * zoom};
                     
-                    int current_iteration = 0;
-
-
-                    while (current_iteration < iterations) {
-                        z_previous = z_current;
-
-                        z_current = std::complex<float>(std::pow(z_previous.real(), 2) - std::pow(z_previous.imag(), 2) + c.real(), 
-                                                        2.0f * z_previous.real() * z_previous.imag() + c.imag());
-
-
-                        if (std::norm(z_current) > 4.0f) break; 
-
-                        current_iteration++;
+                    int iteration = 0; 
+            
+                    while (std::norm(z) < 4.0f && iteration < max_iterations) {
+                        z = z * z + c; // mandelbrot calculation
+                        iteration++;
                     }
-
-                    std::uint8_t blue = 0;
-
-                    if (current_iteration != iterations) {
-                        blue  = static_cast<int>(current_iteration) * 20;
-                    }
-                                           // alpha    + blue  
-                    std::uint32_t colour = (255 << 24) + blue; 
+                    
+                    auto colour_tuple = get_rgb_smooth(iteration, max_iterations); 
+                    
+                                            // alpha                   red                          green                              blue  
+                    std::uint32_t colour = (255 << 24) + (std::get<0>(colour_tuple) << 16) + (std::get<1>(colour_tuple) << 8) + std::get<2>(colour_tuple);  
                     pixels[x + y * width] = colour;
 
                 }
             }
 
             sdl.copy_pixel_buffer_into_render_texture(pixels, sdl.get_renderer_width());
+
+            auto end = std::chrono::system_clock::now();
+            auto passed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+            
+            std::cout << "frame time: " << passed.count() << "ms" << std::endl;
+
         }
 
     } catch (sdl_module_exception & e) {
